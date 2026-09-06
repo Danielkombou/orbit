@@ -18,13 +18,18 @@ import {
   Calendar,
   Search,
   AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Square,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface AgentEvent {
   type: string;
   step?: number;
   max?: number;
   content?: string;
+  delta?: string;
   name?: string;
   args?: Record<string, unknown>;
   result?: string;
@@ -40,11 +45,16 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   browser_type: <Terminal className="w-3 h-3" />,
   browser_screenshot: <Monitor className="w-3 h-3" />,
   run_command: <Terminal className="w-3 h-3" />,
+  search_web: <Search className="w-3 h-3" />,
+  open_website: <Globe className="w-3 h-3" />,
+  remember: <CheckCircle className="w-3 h-3" />,
+  recall: <CheckCircle className="w-3 h-3" />,
 };
 
 export default function DashboardPage() {
   const [task, setTask] = useState("");
   const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [streamingText, setStreamingText] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [liveScreenshot, setLiveScreenshot] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -59,7 +69,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [events, scrollToBottom]);
+  }, [events, streamingText, scrollToBottom]);
 
   // Connect to live view WebSocket
   useEffect(() => {
@@ -99,25 +109,47 @@ export default function DashboardPage() {
     ws.onopen = () => {
       setIsRunning(true);
       setEvents([]);
+      setStreamingText("");
       ws.send(JSON.stringify({ task: task.trim() }));
     };
 
     ws.onmessage = (e) => {
       try {
         const data: AgentEvent = JSON.parse(e.data);
-        setEvents((prev) => [...prev, data]);
+
+        if (data.type === "text_delta") {
+          setStreamingText((prev) => prev + (data.delta || ""));
+          return;
+        }
+
+        if (data.type === "done") {
+          setStreamingText("");
+          setEvents((prev) => [...prev, data]);
+          setIsRunning(false);
+          toast.success("Task completed");
+          return;
+        }
+
+        if (data.type === "error") {
+          setStreamingText("");
+          setEvents((prev) => [...prev, data]);
+          setIsRunning(false);
+          toast.error(data.message || "Agent error");
+          return;
+        }
 
         if (data.screenshot) {
           setLiveScreenshot(`data:image/png;base64,${data.screenshot}`);
         }
 
-        if (data.type === "done" || data.type === "error") {
-          setIsRunning(false);
-        }
+        setEvents((prev) => [...prev, data]);
       } catch {}
     };
 
-    ws.onerror = () => setIsRunning(false);
+    ws.onerror = () => {
+      setIsRunning(false);
+      toast.error("Connection error. Is the agent running?");
+    };
     ws.onclose = () => setIsRunning(false);
     setTask("");
   }, [task, isRunning]);
@@ -125,6 +157,7 @@ export default function DashboardPage() {
   const stopAgent = useCallback(() => {
     wsRef.current?.close();
     setIsRunning(false);
+    toast.info("Agent stopped");
   }, []);
 
   const toggleVoice = useCallback(async () => {
@@ -160,12 +193,15 @@ export default function DashboardPage() {
               setTask(text);
             } else {
               setTask("");
+              toast.error("No speech detected");
             }
           } else {
             setTask("");
+            toast.error("Transcription failed");
           }
         } catch {
           setTask("");
+          toast.error("Transcription failed");
         }
       };
 
@@ -173,15 +209,14 @@ export default function DashboardPage() {
       mediaRecorderRef.current = recorder;
       setIsListening(true);
 
-      // Auto-stop after 5 seconds
       setTimeout(() => {
         if (recorder.state === "recording") {
           recorder.stop();
           setIsListening(false);
         }
-      }, 5000);
+      }, 10000);
     } catch {
-      console.error("Microphone access denied");
+      toast.error("Microphone access denied");
     }
   }, [isListening]);
 
@@ -253,14 +288,6 @@ export default function DashboardPage() {
         </div>
 
         <ScrollArea className="flex-1 p-4">
-          {events.length === 0 && isRunning && (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <Loader2 className="w-12 h-12 text-primary/40 mb-4 animate-spin" />
-              <p className="text-sm text-muted-foreground">
-                Thinking...
-              </p>
-            </div>
-          )}
           {events.length === 0 && !isRunning && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Monitor className="w-12 h-12 text-muted-foreground/30 mb-4" />
@@ -272,13 +299,27 @@ export default function DashboardPage() {
               </p>
             </div>
           )}
+          {events.length === 0 && isRunning && !streamingText && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Loader2 className="w-12 h-12 text-primary/40 mb-4 animate-spin" />
+              <p className="text-sm text-muted-foreground">Thinking...</p>
+            </div>
+          )}
+
           {events.map((e, i) => renderEvent(e, i))}
+
+          {/* Streaming text */}
+          {streamingText && (
+            <div className="py-2 px-3 bg-muted/30 rounded-lg mt-2">
+              <p className="text-sm whitespace-pre-wrap">{streamingText}</p>
+            </div>
+          )}
+
           <div ref={eventsEndRef} />
         </ScrollArea>
 
         {/* Command Input */}
         <div className="p-4 border-t border-border">
-          {/* Quick Commands */}
           {events.length === 0 && !isRunning && (
             <div className="flex gap-2 mb-3 flex-wrap">
               <button
@@ -320,15 +361,11 @@ export default function DashboardPage() {
             />
             {isRunning ? (
               <Button variant="destructive" size="icon" onClick={stopAgent}>
-                <StopCircle className="w-4 h-4" />
+                <Square className="w-4 h-4" />
               </Button>
             ) : (
               <Button size="icon" onClick={sendTask} disabled={!task.trim()}>
-                {isRunning ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
+                <Send className="w-4 h-4" />
               </Button>
             )}
           </div>

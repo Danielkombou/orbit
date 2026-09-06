@@ -388,3 +388,6 @@ SEARCH_TOOLS = [
 ]
 
 ALL_TOOLS = BROWSER_TOOLS + TERMINAL_TOOLS + FILESYSTEM_TOOLS + TASK_TOOLS + NOTE_TOOLS + MEMORY_TOOLS + SEARCH_TOOLS
+
+# Minimal tool set for Groq free tier (7000 ITPM limit with Qwen tokenizer)
+CORE_TOOLS = [TASK_TOOLS[2], MEMORY_TOOLS[1], SEARCH_TOOLS[0]]  # list_tasks, recall, search_web

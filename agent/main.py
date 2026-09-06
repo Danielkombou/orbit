@@ -52,6 +52,7 @@ class RunRequest(BaseModel):
     task: str
     max_steps: int | None = None
     screenshots: list[str] | None = None
+    slim: bool = False
 
 class RunResponse(BaseModel):
     success: bool
@@ -87,7 +88,7 @@ async def get_screenshot():
 async def run_agent(request: RunRequest):
     agent = Agent(max_steps=request.max_steps)
     try:
-        result = await agent.run(request.task, screenshots=request.screenshots)
+        result = await agent.run(request.task, screenshots=request.screenshots, slim=request.slim)
         return RunResponse(success=result.success, answer=result.answer, total_steps=result.total_steps)
     finally:
         await agent.cleanup()
@@ -98,7 +99,7 @@ async def run_agent_stream(request: RunRequest):
 
     async def event_stream():
         try:
-            async for event in agent.run_streaming(request.task, screenshots=request.screenshots):
+            async for event in agent.run_streaming(request.task, screenshots=request.screenshots, slim=request.slim):
                 yield f"data: {json.dumps(event)}\n\n"
         finally:
             await agent.cleanup()

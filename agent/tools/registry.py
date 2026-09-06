@@ -7,7 +7,7 @@ import logging
 from typing import Any, Callable, Awaitable
 
 from computer import Computer
-from tools.definitions import ALL_TOOLS
+from tools.definitions import ALL_TOOLS, CORE_TOOLS
 from tools.web import search_web, open_website
 import data
 
@@ -105,6 +105,9 @@ class ToolRegistry:
 
     def get_definitions(self) -> list[dict]:
         return ALL_TOOLS
+
+    def get_core_definitions(self) -> list[dict]:
+        return CORE_TOOLS
 
     def list_tools(self) -> list[str]:
         return list(self._tools.keys())

@@ -33,6 +33,14 @@ const nextConfig: NextConfig = {
         source: "/api/tts",
         destination: `${API_URL}/api/tts`,
       },
+      {
+        source: "/api/ai/autopilot",
+        destination: `${API_URL}/api/ai/autopilot`,
+      },
+      {
+        source: "/api/ai/stream",
+        destination: `${API_URL}/api/ai/stream`,
+      },
     ];
   },
 };

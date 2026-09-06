@@ -63,6 +63,50 @@ export async function aiRoutes(app: FastifyInstance) {
     reply.raw.end();
   });
 
+  // Student Autopilot — hero workflow for demo
+  app.post("/autopilot", async (request, reply) => {
+    const { mode } = request.body as { mode?: string };
+
+    const autopilotPrompts: Record<string, string> = {
+      weekly: "Prepare me for next week. Check my existing tasks, notes, and memories. Search for upcoming academic deadlines, career fairs, and university events. Create a comprehensive weekly schedule with day-by-day breakdown. Create tasks for each deadline. Save the plan as a note.",
+      today: "What do I need to do today? Check my tasks, notes, and memories. Search for any deadlines I might be missing. Create a prioritized today list.",
+     Internships: "Find me internship opportunities. Search the web for current CS internship openings. Create tasks for the best ones with application deadlines. Remember the top 3 picks.",
+    };
+
+    const task = autopilotPrompts[mode || "weekly"] || autopilotPrompts.weekly;
+
+    reply.raw.setHeader("Content-Type", "text/event-stream");
+    reply.raw.setHeader("Cache-Control", "no-cache");
+    reply.raw.setHeader("Connection", "keep-alive");
+
+    try {
+      const res = await fetch(`${AGENT_URL}/agent/run/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task, max_steps: 12, slim: true }),
+      });
+
+      if (!res.ok || !res.body) {
+        reply.raw.end("data: {\"type\":\"error\",\"message\":\"Agent unavailable\"}\n\n");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        reply.raw.write(chunk);
+      }
+    } catch {
+      reply.raw.write("data: {\"type\":\"error\",\"message\":\"Agent connection failed\"}\n\n");
+    }
+
+    reply.raw.end();
+  });
+
   app.get("/models", async () => {
     return {
       models: [

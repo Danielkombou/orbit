@@ -11,12 +11,14 @@ import {
   Activity,
   LogOut,
   CheckSquare,
+  Rocket,
 } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth-client";
 import { AuthGuard } from "@/components/auth-guard";
 import { toast } from "sonner";
 
 const NAV_ITEMS = [
+  { href: "/autopilot", label: "Autopilot", icon: Rocket },
   { href: "/dashboard", label: "Control Center", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
