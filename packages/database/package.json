@@ -1,0 +1,27 @@
+{
+  "name": "@orbit/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "db:generate": "DATABASE_URL=${DATABASE_URL:-postgresql://orbit:orbit@localhost:5432/orbit} drizzle-kit generate",
+    "db:migrate": "DATABASE_URL=${DATABASE_URL:-postgresql://orbit:orbit@localhost:5432/orbit} drizzle-kit migrate",
+    "db:push": "DATABASE_URL=${DATABASE_URL:-postgresql://orbit:orbit@localhost:5432/orbit} drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@orbit/types": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "drizzle-kit": "^0.31.0",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

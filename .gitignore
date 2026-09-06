@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.next/
+dist/
+build/
+out/
+coverage/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+
+# Git
+*.swp

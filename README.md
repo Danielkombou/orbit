@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ORBIT
+
+Your AI assistant that lives on your device. Built for focus, productivity and complete privacy.
+
+## Architecture
+
+```
+orbit/
+├── apps/
+│   ├── web/                    ← Next.js frontend (dashboard control center)
+│   └── api/                    ← Node.js API gateway
+├── agent/                      ← Python AI agent (the brain)
+│   ├── computer/               ← Browser, filesystem, terminal control
+│   ├── llm/                    ← LLM client (OpenAI, Anthropic, Gemini)
+│   ├── tools/                  ← Tool registry (20+ tools)
+│   ├── voice/                  ← STT, TTS, wake word detection
+│   ├── agent_core.py           ← Observation loop (think → act → observe)
+│   └── main.py                 ← FastAPI server (REST + WebSocket)
+├── infrastructure/
+│   └── docker/                 ← Dockerfiles + compose
+└── packages/
+    ├── database/               ← Supabase/DB layer
+    ├── types/                  ← Shared TypeScript/Python schemas
+    └── ui/                     ← Shared UI components (shadcn)
+```
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 22+
+- Python 3.10+
+- An LLM API key (Gemini, OpenAI, or Anthropic)
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install JS deps
+pnpm install
+
+# Set up Python agent
+cd agent
+python3 -m venv .venv
+source .venv/bin/activate
+pip install playwright openai anthropic google-generativeai fastapi "uvicorn[standard]" pydantic python-dotenv httpx edge-tts pyaudio
+playwright install chromium
+
+# Configure
+cp .env.example .env
+# Edit .env with your API keys
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Run
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Frontend (port 3000)
+pnpm dev:web
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Agent (port 8000)
+cd agent && python main.py
 
-## Learn More
+# Or with Docker
+cd infrastructure/docker && docker-compose up
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Usage
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Dashboard**: Open http://localhost:3000/dashboard — send commands and watch ORBIT work in real-time.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**API**:
+```bash
+# Run a task
+curl -X POST http://localhost:8000/agent/run \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Open Google and search for cats"}'
 
-## Deploy on Vercel
+# Stream events
+curl -X POST http://localhost:8000/agent/run/stream \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Find the weather in London"}'
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# WebSocket (real-time)
+ws://localhost:8000/ws/agent
+ws://localhost:8000/ws/live
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Phases
+
+### Phase 1 — Core
+- Playwright browser automation
+- Terminal command execution
+- Filesystem operations
+- LLM-powered planning (OpenAI, Anthropic, Gemini)
+- Tool calling observation loop
+
+### Phase 2 — Computer Use
+- Screenshots + visual understanding
+- Mouse/keyboard control
+- Tab management
+- Live browser view (WebSocket)
+- CSS selector + coordinate-based interaction
+
+### Phase 3 — Voice
+- Wake word detection ("Hey ORBIT")
+- Streaming speech recognition
+- Text-to-speech (Edge TTS)
+- Conversational context
+- Interruption support
+
+## LLM Providers
+
+| Provider | Model | Env Var |
+|----------|-------|---------|
+| Gemini | gemini-2.0-flash | `GEMINI_API_KEY` |
+| OpenAI | gpt-4o | `OPENAI_API_KEY` |
+| Anthropic | claude-sonnet-4-20250514 | `ANTHROPIC_API_KEY` |
+
+Set `LLM_PROVIDER` in `.env` to switch between providers.
+
+## Agent Tools (20+)
+
+| Category | Tools |
+|----------|-------|
+| Browser | navigate, click, type, press, hover, scroll, screenshot |
+| Tabs | new_tab, switch_tab, close_tab, list_tabs |
+| Mouse | mouse_click, mouse_move, mouse_scroll |
+| Content | get_content, evaluate (JS), wait_for |
+| Terminal | run_command |
+| Files | read_file, write_file, list_dir |
+
+## Tech Stack
+
+- **Frontend**: Next.js 16, React 19, Tailwind CSS, shadcn/ui, motion, lucide
+- **Agent**: Python 3.10, Playwright, FastAPI, WebSocket
+- **LLM**: OpenAI / Anthropic / Google Gemini
+- **Voice**: Edge TTS, speech_recognition
+- **Infra**: Docker, docker-compose

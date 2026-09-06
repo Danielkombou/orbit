@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: orbit
+      POSTGRES_PASSWORD: orbit
+      POSTGRES_DB: orbit
+    volumes:
+      - orbit-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_AGENT_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.api
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://orbit:orbit@postgres:5432/orbit
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=http://localhost:3001
+      - CLIENT_ORIGIN=http://localhost:3000
+      - AGENT_URL=http://agent:8000
+    depends_on:
+      - postgres
+      - agent
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.agent
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - orbit-sandbox:/tmp/orbit-sandbox
+    restart: unless-stopped
+
+volumes:
+  orbit-postgres:
+  orbit-sandbox:
