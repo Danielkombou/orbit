@@ -4,29 +4,28 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/auth-client";
+import { toast } from "sonner";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      toast.error("Password must be at least 8 characters");
       return;
     }
     if (!/\d/.test(password)) {
-      setError("Password must include a number");
+      toast.error("Password must include a number");
       return;
     }
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      setError("Password must include a special character");
+      toast.error("Password must include a special character");
       return;
     }
 
@@ -40,12 +39,13 @@ export default function RegisterPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || "Registration failed");
+        toast.error(result.error.message || "Registration failed");
       } else {
+        toast.success("Account created! Welcome to ORBIT.");
         router.push("/dashboard");
       }
     } catch {
-      setError("Something went wrong. Please try again.");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -60,11 +60,6 @@ export default function RegisterPage() {
         Start your journey with ORBIT
       </p>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        )}
         <div className="space-y-2">
           <label className="text-sm font-medium">Full name</label>
           <input

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Save, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -20,7 +21,6 @@ export default function SettingsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -48,7 +48,6 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    setSaved(false);
     try {
       const res = await fetch(`${API_URL}/api/settings`, {
         method: "PUT",
@@ -57,11 +56,12 @@ export default function SettingsPage() {
         body: JSON.stringify(settings),
       });
       if (res.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        toast.success("Settings saved");
+      } else {
+        toast.error("Failed to save settings");
       }
     } catch {
-      console.error("Failed to save settings");
+      toast.error("Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -94,7 +94,7 @@ export default function SettingsPage() {
           ) : (
             <Save className="w-4 h-4 mr-2" />
           )}
-          {saved ? "Saved!" : "Save"}
+          {saving ? "Saving..." : "Save"}
         </Button>
       </div>
 

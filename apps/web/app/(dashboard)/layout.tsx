@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth-client";
 import { AuthGuard } from "@/components/auth-guard";
+import { toast } from "sonner";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Control Center", icon: LayoutDashboard },
@@ -31,6 +32,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut();
+    toast.success("Signed out successfully");
     router.push("/login");
   };
 

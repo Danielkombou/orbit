@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { CheckSquare, Plus, Trash2, Calendar, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -64,9 +65,14 @@ export default function TasksPage() {
       if (res.ok) {
         setNewTitle(""); setNewDesc(""); setNewPriority("medium"); setNewDue("");
         setShowCreate(false);
+        toast.success("Task created");
         fetchTasks();
+      } else {
+        toast.error("Failed to create task");
       }
-    } catch {}
+    } catch {
+      toast.error("Failed to create task");
+    }
   };
 
   const completeTask = async (id: number) => {
@@ -74,6 +80,7 @@ export default function TasksPage() {
       method: "PATCH",
       credentials: "include",
     });
+    toast.success("Task completed");
     fetchTasks();
   };
 
@@ -82,6 +89,7 @@ export default function TasksPage() {
       method: "DELETE",
       credentials: "include",
     });
+    toast.success("Task deleted");
     fetchTasks();
   };
 

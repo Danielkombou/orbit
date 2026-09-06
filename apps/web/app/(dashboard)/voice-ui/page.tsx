@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Mic, MicOff, Loader2, Volume2 } from "lucide-react";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8000";
@@ -12,7 +13,6 @@ export default function VoiceUIPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [response, setResponse] = useState("");
-  const [error, setError] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -47,7 +47,6 @@ export default function VoiceUIPage() {
   }, []);
 
   const startListening = useCallback(async () => {
-    setError("");
     setTranscript("");
     setResponse("");
 
@@ -70,7 +69,7 @@ export default function VoiceUIPage() {
           });
 
           if (!transcribeRes.ok) {
-            setError("Transcription failed");
+            toast.error("Transcription failed");
             setIsProcessing(false);
             return;
           }
@@ -79,7 +78,7 @@ export default function VoiceUIPage() {
           setTranscript(text);
 
           if (!text || text.trim().length === 0) {
-            setError("No speech detected");
+            toast.error("No speech detected");
             setIsProcessing(false);
             return;
           }
@@ -92,7 +91,7 @@ export default function VoiceUIPage() {
           });
 
           if (!agentRes.ok) {
-            setError("Agent is not available");
+            toast.error("Agent is not available");
             setIsProcessing(false);
             return;
           }
@@ -103,7 +102,7 @@ export default function VoiceUIPage() {
           // 3. Play TTS response
           await playAudio(agentData.answer);
         } catch {
-          setError("Failed to process voice");
+          toast.error("Failed to process voice");
         } finally {
           setIsProcessing(false);
         }
@@ -121,7 +120,7 @@ export default function VoiceUIPage() {
         }
       }, 5000);
     } catch {
-      setError("Microphone access denied");
+      toast.error("Microphone access denied");
     }
   }, [playAudio]);
 
@@ -131,12 +130,6 @@ export default function VoiceUIPage() {
       <p className="text-muted-foreground mb-12">
         Speak naturally to your AI assistant.
       </p>
-
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2 text-sm text-destructive mb-6">
-          {error}
-        </div>
-      )}
 
       <div className="relative mb-8">
         <button
@@ -175,7 +168,7 @@ export default function VoiceUIPage() {
           : "Tap to speak"}
       </p>
 
-      {(transcript || response || error) && (
+      {(transcript || response) && (
         <div className="w-full max-w-md space-y-4">
           {transcript && (
             <div className="p-3 rounded-lg bg-muted text-sm">

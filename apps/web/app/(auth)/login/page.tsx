@@ -4,17 +4,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
@@ -24,12 +23,13 @@ export default function LoginPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || "Invalid email or password");
+        toast.error(result.error.message || "Invalid email or password");
       } else {
+        toast.success("Welcome back!");
         router.push("/dashboard");
       }
     } catch {
-      setError("Something went wrong. Please try again.");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -42,11 +42,6 @@ export default function LoginPage() {
         Log in to continue to ORBIT
       </p>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        )}
         <div className="space-y-2">
           <label className="text-sm font-medium">Email address</label>
           <input
