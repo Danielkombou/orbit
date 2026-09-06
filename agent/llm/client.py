@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from .types import LLMResponse, Message, Role, ToolCall
 
@@ -66,6 +66,97 @@ class LLMClient:
         if self.provider == "gemini":
             return await self._chat_gemini(client, model, messages, tools, images)
         return await self._chat_openai(client, model, messages, tools, images)
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        tools: list[dict] | None = None,
+        images: list[str] | None = None,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream a chat completion, yielding {type, ...} events."""
+        client = self._get_client()
+        model = self._get_model()
+
+        if self.provider == "openai":
+            async for event in self._chat_openai_stream(client, model, messages, tools, images):
+                yield event
+        else:
+            # Fallback: non-streaming providers yield full response as one chunk
+            resp = await self.chat(messages, tools, images)
+            if resp.content:
+                yield {"type": "text_delta", "delta": resp.content}
+            if resp.tool_calls:
+                yield {"type": "tool_calls", "tool_calls": resp.tool_calls}
+            yield {"type": "done", "finish_reason": resp.finish_reason}
+
+    async def _chat_openai_stream(
+        self, client, model: str, messages: list[Message],
+        tools: list[dict] | None, images: list[str] | None,
+    ) -> AsyncGenerator[dict, None]:
+        formatted = [m.to_dict() for m in messages]
+
+        if images and formatted:
+            last_user = None
+            for i in range(len(formatted) - 1, -1, -1):
+                if formatted[i]["role"] == "user":
+                    last_user = i
+                    break
+            if last_user is not None:
+                content_parts = [{"type": "text", "text": formatted[last_user].get("content", "")}]
+                for img in images:
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{img}"},
+                    })
+                formatted[last_user]["content"] = content_parts
+
+        kwargs: dict[str, Any] = {"model": model, "messages": formatted, "stream": True}
+        if tools:
+            kwargs["tools"] = tools
+        kwargs["max_tokens"] = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+
+        stream = await client.chat.completions.create(**kwargs)
+
+        # Accumulate tool calls from streamed chunks
+        tool_calls_acc: dict[int, dict] = {}
+        content_parts: list[str] = []
+        finish_reason = None
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            finish_reason = chunk.choices[0].finish_reason if chunk.choices else finish_reason
+
+            if delta and delta.content:
+                content_parts.append(delta.content)
+                yield {"type": "text_delta", "delta": delta.content}
+
+            if delta and delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_calls_acc:
+                        tool_calls_acc[idx] = {"id": tc_delta.id or "", "name": "", "args_str": ""}
+                    acc = tool_calls_acc[idx]
+                    if tc_delta.id:
+                        acc["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            acc["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            acc["args_str"] += tc_delta.function.arguments
+
+        # Yield accumulated tool calls
+        if tool_calls_acc:
+            tool_calls = []
+            for idx in sorted(tool_calls_acc.keys()):
+                acc = tool_calls_acc[idx]
+                try:
+                    args = json.loads(acc["args_str"])
+                except json.JSONDecodeError:
+                    args = {"raw": acc["args_str"]}
+                tool_calls.append(ToolCall(id=acc["id"], name=acc["name"], arguments=args))
+            yield {"type": "tool_calls", "tool_calls": tool_calls}
+
+        yield {"type": "done", "finish_reason": finish_reason}
 
     async def _chat_openai(
         self, client, model: str, messages: list[Message],

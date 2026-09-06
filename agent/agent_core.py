@@ -127,25 +127,35 @@ class Agent:
         for step_num in range(1, self.max_steps + 1):
             yield {"type": "step_start", "step": step_num, "max": self.max_steps}
 
-            response = await self.llm.chat(
+            # Stream tokens from the LLM
+            content_parts: list[str] = []
+            tool_calls = []
+
+            async for event in self.llm.chat_stream(
                 messages=messages,
                 tools=self.tools.get_definitions(),
                 images=pending_screenshots if pending_screenshots else None,
-            )
+            ):
+                if event["type"] == "text_delta":
+                    content_parts.append(event["delta"])
+                    yield {"type": "text_delta", "delta": event["delta"]}
+                elif event["type"] == "tool_calls":
+                    tool_calls = event["tool_calls"]
+                elif event["type"] == "done":
+                    pass
+
             pending_screenshots = []
+            full_content = "".join(content_parts) if content_parts else None
 
-            if response.content:
-                yield {"type": "thought", "content": response.content}
-
-            if not response.has_tool_calls:
-                yield {"type": "done", "answer": response.content or "Task completed.", "success": True}
+            if not tool_calls:
+                yield {"type": "done", "answer": full_content or "Task completed.", "success": True}
                 return
 
             messages.append(Message(
-                role=Role.ASSISTANT, content=response.content, tool_calls=response.tool_calls,
+                role=Role.ASSISTANT, content=full_content, tool_calls=tool_calls,
             ))
 
-            for tc in response.tool_calls:
+            for tc in tool_calls:
                 yield {"type": "tool_call", "name": tc.name, "args": tc.arguments}
                 result_str = await self.tools.execute(tc.name, tc.arguments)
 
