@@ -6,6 +6,11 @@ build/
 out/
 coverage/
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+
 # Env
 .env
 .env.local
