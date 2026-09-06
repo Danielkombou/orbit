@@ -15,6 +15,9 @@ import {
   Eye,
   Loader2,
   StopCircle,
+  Calendar,
+  Search,
+  AlertTriangle,
 } from "lucide-react";
 
 interface AgentEvent {
@@ -136,31 +139,47 @@ export default function DashboardPage() {
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       const chunks: Blob[] = [];
 
-      const AGENT_URL = "http://localhost:8000";
+      const API_URL = "http://localhost:3001";
 
       recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks, { type: "audio/webm" });
 
-        // Send audio to agent for speech-to-text then execute
         try {
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const base64 = (reader.result as string).split(",")[1];
-            // Use the voice endpoint - send a transcribed text prompt
-            // In production, the agent would handle audio directly
-            setTask("[Voice] Processing voice command...");
-          };
-          reader.readAsDataURL(blob);
+          const audioBlob = new Blob(chunks, { type: "audio/webm" });
+          setTask("Transcribing...");
+
+          const res = await fetch(`${API_URL}/api/transcribe`, {
+            method: "POST",
+            body: audioBlob,
+          });
+
+          if (res.ok) {
+            const { text } = (await res.json()) as { text: string };
+            if (text && text.trim().length > 0) {
+              setTask(text);
+            } else {
+              setTask("");
+            }
+          } else {
+            setTask("");
+          }
         } catch {
-          console.error("Voice processing failed");
+          setTask("");
         }
       };
 
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsListening(true);
+
+      // Auto-stop after 5 seconds
+      setTimeout(() => {
+        if (recorder.state === "recording") {
+          recorder.stop();
+          setIsListening(false);
+        }
+      }, 5000);
     } catch {
       console.error("Microphone access denied");
     }
@@ -259,6 +278,29 @@ export default function DashboardPage() {
 
         {/* Command Input */}
         <div className="p-4 border-t border-border">
+          {/* Quick Commands */}
+          {events.length === 0 && !isRunning && (
+            <div className="flex gap-2 mb-3 flex-wrap">
+              <button
+                onClick={() => { setTask("Plan my week"); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Calendar className="w-3 h-3" /> Plan my week
+              </button>
+              <button
+                onClick={() => { setTask("What am I forgetting?"); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <AlertTriangle className="w-3 h-3" /> What am I forgetting?
+              </button>
+              <button
+                onClick={() => { setTask("Find me frontend internships"); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Search className="w-3 h-3" /> Internship Scout
+              </button>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button
               variant="ghost"

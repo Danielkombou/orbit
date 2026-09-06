@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from agent_core import Agent
 from voice import VoiceManager
+import data
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,80 @@ async def voice_command(request: VoiceRequest):
         }
     finally:
         await agent.cleanup()
+
+
+# ─── Data REST Endpoints ─────────────────────────────────────────
+
+@app.get("/agent/tasks")
+async def list_tasks(status: str | None = None, limit: int = 20):
+    return data.list_tasks(status=status, limit=limit)
+
+class TaskCreate(BaseModel):
+    title: str
+    description: str = ""
+    priority: str = "medium"
+    due_date: str | None = None
+
+@app.post("/agent/tasks")
+async def create_task(request: TaskCreate):
+    return data.create_task(
+        title=request.title,
+        description=request.description,
+        priority=request.priority,
+        due_date=request.due_date,
+    )
+
+@app.patch("/agent/tasks/{task_id}/complete")
+async def complete_task(task_id: int):
+    return data.complete_task(task_id)
+
+@app.delete("/agent/tasks/{task_id}")
+async def delete_task(task_id: int):
+    return data.delete_task(task_id)
+
+
+@app.get("/agent/notes")
+async def list_notes(tag: str | None = None, limit: int = 20):
+    return data.list_notes(tag=tag, limit=limit)
+
+class NoteCreate(BaseModel):
+    title: str
+    content: str
+    tags: list[str] | None = None
+
+@app.post("/agent/notes")
+async def create_note(request: NoteCreate):
+    return data.create_note(
+        title=request.title,
+        content=request.content,
+        tags=request.tags,
+    )
+
+@app.delete("/agent/notes/{note_id}")
+async def delete_note(note_id: int):
+    return data.delete_note(note_id)
+
+
+class MemoryStore(BaseModel):
+    key: str
+    content: str
+    category: str = "general"
+
+@app.get("/agent/memories")
+async def list_memories(category: str | None = None, limit: int = 50):
+    return data.recall_all(category=category, limit=limit)
+
+@app.post("/agent/memories")
+async def store_memory(request: MemoryStore):
+    return data.remember(key=request.key, content=request.content, category=request.category)
+
+@app.get("/agent/memories/{key}")
+async def get_memory(key: str):
+    return data.recall(key=key)
+
+@app.delete("/agent/memories/{key}")
+async def forget_memory(key: str):
+    return data.forget(key)
 
 
 # ─── WebSocket for real-time events ──────────────────────────────

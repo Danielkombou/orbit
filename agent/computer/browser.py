@@ -121,10 +121,16 @@ class BrowserComputer:
 
     # ─── Interaction ──────────────────────────────────────────────
 
-    async def click(self, selector: str) -> dict:
+    async def click(self, selector: str | None = None, x: int | None = None, y: int | None = None) -> dict:
         page = await self._ensure_page()
-        await page.click(selector)
-        return {"selector": selector, "clicked": True}
+        if selector:
+            await page.click(selector)
+            return {"selector": selector, "clicked": True}
+        elif x is not None and y is not None:
+            await page.mouse.click(x, y)
+            return {"x": x, "y": y, "clicked": True}
+        else:
+            return {"error": "Provide selector or x,y coordinates"}
 
     async def type_text(self, selector: str, text: str) -> dict:
         page = await self._ensure_page()

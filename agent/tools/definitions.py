@@ -19,13 +19,14 @@ BROWSER_TOOLS = [
         "type": "function",
         "function": {
             "name": "browser_click",
-            "description": "Click an element on the page by CSS selector",
+            "description": "Click an element on the page by CSS selector or at x,y coordinates",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector"}
+                    "selector": {"type": "string", "description": "CSS selector (use for DOM elements)"},
+                    "x": {"type": "integer", "description": "X coordinate (use for pixel-precise clicks)"},
+                    "y": {"type": "integer", "description": "Y coordinate (use for pixel-precise clicks)"},
                 },
-                "required": ["selector"],
             },
         },
     },
@@ -77,147 +78,6 @@ BROWSER_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "browser_new_tab",
-            "description": "Open a new browser tab",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "URL to open (default: about:blank)"}
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_switch_tab",
-            "description": "Switch to a different tab by index",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "index": {"type": "integer", "description": "Tab index to switch to"}
-                },
-                "required": ["index"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_close_tab",
-            "description": "Close a tab by index (or current tab if no index)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "index": {"type": "integer", "description": "Tab index to close"}
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_list_tabs",
-            "description": "List all open tabs",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_mouse_click",
-            "description": "Click at specific x,y coordinates on the page",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer", "description": "X coordinate"},
-                    "y": {"type": "integer", "description": "Y coordinate"},
-                    "button": {"type": "string", "description": "Mouse button: left, right, middle"},
-                },
-                "required": ["x", "y"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_mouse_move",
-            "description": "Move the mouse to x,y coordinates",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer", "description": "X coordinate"},
-                    "y": {"type": "integer", "description": "Y coordinate"},
-                },
-                "required": ["x", "y"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_mouse_scroll",
-            "description": "Scroll the page at x,y coordinates",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer", "description": "X coordinate"},
-                    "y": {"type": "integer", "description": "Y coordinate"},
-                    "delta_x": {"type": "integer", "description": "Horizontal scroll delta"},
-                    "delta_y": {"type": "integer", "description": "Vertical scroll delta (positive = down)"},
-                },
-                "required": ["x", "y", "delta_x", "delta_y"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_go_back",
-            "description": "Navigate back in browser history",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_go_forward",
-            "description": "Navigate forward in browser history",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_select_option",
-            "description": "Select an option from a dropdown by CSS selector",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for the select element"},
-                    "value": {"type": "string", "description": "Value to select"},
-                },
-                "required": ["selector", "value"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "browser_hover",
-            "description": "Hover over an element by CSS selector",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "selector": {"type": "string", "description": "CSS selector"}
-                },
-                "required": ["selector"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "browser_evaluate",
             "description": "Execute JavaScript in the page and return the result",
             "parameters": {
@@ -232,15 +92,24 @@ BROWSER_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "browser_wait_for",
-            "description": "Wait for a CSS selector to appear on the page",
+            "name": "browser_go_back",
+            "description": "Navigate back in browser history",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_mouse_scroll",
+            "description": "Scroll the page at x,y coordinates",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector to wait for"},
-                    "timeout": {"type": "integer", "description": "Timeout in ms (default 5000)"},
+                    "x": {"type": "integer", "description": "X coordinate"},
+                    "y": {"type": "integer", "description": "Y coordinate"},
+                    "delta_y": {"type": "integer", "description": "Vertical scroll delta (positive = down)"},
                 },
-                "required": ["selector"],
+                "required": ["x", "y", "delta_y"],
             },
         },
     },
@@ -316,4 +185,206 @@ FILESYSTEM_TOOLS = [
     },
 ]
 
-ALL_TOOLS = BROWSER_TOOLS + TERMINAL_TOOLS + FILESYSTEM_TOOLS
+TASK_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_task",
+            "description": "Create a new task or to-do item. Use for assignments, deadlines, reminders, and action items.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Task title"},
+                    "description": {"type": "string", "description": "Detailed description"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"], "description": "Priority level"},
+                    "due_date": {"type": "string", "description": "Due date in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM)"},
+                },
+                "required": ["title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Mark a task as completed",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID of the task to complete"}
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": "List tasks, optionally filtered by status",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "completed", "all"], "description": "Filter by status"},
+                    "limit": {"type": "integer", "description": "Max results (default 20)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_task",
+            "description": "Delete a task",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID of the task to delete"}
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+]
+
+NOTE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_note",
+            "description": "Create a note for storing information, ideas, or references",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Note title"},
+                    "content": {"type": "string", "description": "Note content"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags for categorization"},
+                },
+                "required": ["title", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_notes",
+            "description": "List notes, optionally filtered by tag",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tag": {"type": "string", "description": "Filter by tag"},
+                    "limit": {"type": "integer", "description": "Max results (default 20)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_note",
+            "description": "Delete a note",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_id": {"type": "integer", "description": "ID of the note to delete"}
+                },
+                "required": ["note_id"],
+            },
+        },
+    },
+]
+
+MEMORY_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": "Store a piece of information in memory for later recall. Use for user preferences, important facts, context, or anything the user wants you to remember.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Unique key to remember this by (e.g. 'user_name', 'project_deadline')"},
+                    "content": {"type": "string", "description": "The information to remember"},
+                    "category": {"type": "string", "description": "Category (e.g. 'preference', 'fact', 'context', 'deadline')"},
+                },
+                "required": ["key", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recall",
+            "description": "Recall a specific memory by key, or list all memories in a category",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Key to look up (if omitted, lists all memories)"},
+                    "category": {"type": "string", "description": "Filter by category"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forget",
+            "description": "Delete a memory by key",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Key of the memory to forget"}
+                },
+                "required": ["key"],
+            },
+        },
+    },
+]
+
+SEARCH_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for information using DuckDuckGo. Returns search results with titles, URLs, and snippets.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "num_results": {"type": "integer", "description": "Number of results (default 5)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_website",
+            "description": "Open a website and return its text content. Simpler than browser_navigate for quick page reads.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to open and read"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_file",
+            "description": "Read a file and produce a summary of its contents",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file (relative to sandbox)"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+]
+
+ALL_TOOLS = BROWSER_TOOLS + TERMINAL_TOOLS + FILESYSTEM_TOOLS + TASK_TOOLS + NOTE_TOOLS + MEMORY_TOOLS + SEARCH_TOOLS

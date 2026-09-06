@@ -8,6 +8,8 @@ from typing import Any, Callable, Awaitable
 
 from computer import Computer
 from tools.definitions import ALL_TOOLS
+from tools.web import search_web, open_website
+import data
 
 logger = logging.getLogger(__name__)
 
@@ -26,32 +28,18 @@ class ToolRegistry:
         # Browser navigation
         self.register("browser_navigate", c.browser.navigate)
         self.register("browser_go_back", c.browser.go_back)
-        self.register("browser_go_forward", c.browser.go_forward)
         self.register("browser_reload", c.browser.reload)
 
-        # Browser interaction
+        # Browser interaction (click supports both selector and x,y)
         self.register("browser_click", c.browser.click)
         self.register("browser_type", c.browser.type_text)
         self.register("browser_press", c.browser.press)
-        self.register("browser_select_option", c.browser.select_option)
-        self.register("browser_hover", c.browser.hover)
-
-        # Browser mouse
-        self.register("browser_mouse_click", c.browser.mouse_click)
-        self.register("browser_mouse_move", c.browser.mouse_move)
-        self.register("browser_mouse_scroll", c.browser.mouse_scroll)
-
-        # Browser tabs
-        self.register("browser_new_tab", c.browser.new_tab)
-        self.register("browser_switch_tab", c.browser.switch_tab)
-        self.register("browser_close_tab", c.browser.close_tab)
-        self.register("browser_list_tabs", c.browser.list_tabs)
 
         # Browser content
         self.register("browser_screenshot", c.browser.screenshot)
         self.register("browser_get_content", c.browser.get_content)
         self.register("browser_evaluate", c.browser.evaluate)
-        self.register("browser_wait_for", c.browser.wait_for)
+        self.register("browser_mouse_scroll", c.browser.mouse_scroll)
         self.register("browser_close", c.browser.close)
 
         # Terminal
@@ -61,6 +49,45 @@ class ToolRegistry:
         self.register("read_file", c.filesystem.read_file)
         self.register("write_file", c.filesystem.write_file)
         self.register("list_dir", c.filesystem.list_dir)
+
+        # Tasks
+        self.register("create_task", _wrap(data.create_task))
+        self.register("complete_task", _wrap(data.complete_task))
+        self.register("list_tasks", _wrap(data.list_tasks))
+        self.register("delete_task", _wrap(data.delete_task))
+
+        # Notes
+        self.register("create_note", _wrap(data.create_note))
+        self.register("list_notes", _wrap(data.list_notes))
+        self.register("delete_note", _wrap(data.delete_note))
+
+        # Memory
+        self.register("remember", _wrap(data.remember))
+        self.register("recall", _wrap(data.recall))
+        self.register("forget", _wrap(data.forget))
+
+        # Web search
+        self.register("search_web", search_web)
+        self.register("open_website", open_website)
+
+        # Summarize (reads file then summarizes inline — no LLM call needed here)
+        self.register("summarize_file", self._summarize_file)
+
+    async def _summarize_file(self, path: str) -> dict:
+        """Read a file and return a summary."""
+        content = await self.computer.filesystem.read_file(path)
+        if "error" in content:
+            return content
+        text = content.get("content", "")
+        # Simple extractive summary: first 500 chars + key lines
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        summary_lines = lines[:20]
+        return {
+            "path": path,
+            "total_lines": len(lines),
+            "summary": "\n".join(summary_lines),
+            "truncated": len(text) > 5000,
+        }
 
     def register(self, name: str, fn: Callable[..., Awaitable[dict]]):
         self._tools[name] = fn
@@ -81,3 +108,10 @@ class ToolRegistry:
 
     def list_tools(self) -> list[str]:
         return list(self._tools.keys())
+
+
+def _wrap(fn):
+    """Wrap a synchronous function to be awaitable."""
+    async def wrapper(**kwargs):
+        return fn(**kwargs)
+    return wrapper

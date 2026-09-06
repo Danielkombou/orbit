@@ -1,19 +1,45 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Send, Loader2 } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Mic, MicOff, Loader2, Volume2 } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:8000";
 
 export default function VoiceUIPage() {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [response, setResponse] = useState("");
   const [error, setError] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playAudio = useCallback(async (text: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        setIsSpeaking(true);
+        audio.onended = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+        };
+        audio.play();
+      }
+    } catch {
+      // TTS is optional, don't block on failure
+    }
+  }, []);
 
   const stopListening = useCallback(() => {
     mediaRecorderRef.current?.stop();
@@ -28,28 +54,56 @@ export default function VoiceUIPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      chunksRef.current = [];
+      const chunks: Blob[] = [];
 
-      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+      recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        // In a real implementation, we'd send the audio to the agent
-        // For now, we use a text-based approach
         setIsProcessing(true);
+
         try {
-          const res = await fetch(`${AGENT_URL}/agent/voice`, {
+          // 1. Send audio to /api/transcribe
+          const audioBlob = new Blob(chunks, { type: "audio/webm" });
+          const transcribeRes = await fetch(`${API_URL}/api/transcribe`, {
+            method: "POST",
+            body: audioBlob,
+          });
+
+          if (!transcribeRes.ok) {
+            setError("Transcription failed");
+            setIsProcessing(false);
+            return;
+          }
+
+          const { text } = (await transcribeRes.json()) as { text: string };
+          setTranscript(text);
+
+          if (!text || text.trim().length === 0) {
+            setError("No speech detected");
+            setIsProcessing(false);
+            return;
+          }
+
+          // 2. Send text to agent
+          const agentRes = await fetch(`${AGENT_URL}/agent/run`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: transcript || "Hello" }),
+            body: JSON.stringify({ task: text }),
           });
-          if (res.ok) {
-            const data = await res.json();
-            setResponse(data.answer);
-          } else {
+
+          if (!agentRes.ok) {
             setError("Agent is not available");
+            setIsProcessing(false);
+            return;
           }
+
+          const agentData = (await agentRes.json()) as { answer: string };
+          setResponse(agentData.answer);
+
+          // 3. Play TTS response
+          await playAudio(agentData.answer);
         } catch {
-          setError("Failed to connect to agent");
+          setError("Failed to process voice");
         } finally {
           setIsProcessing(false);
         }
@@ -69,7 +123,7 @@ export default function VoiceUIPage() {
     } catch {
       setError("Microphone access denied");
     }
-  }, [transcript]);
+  }, [playAudio]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-8">
@@ -116,6 +170,8 @@ export default function VoiceUIPage() {
           ? "Listening..."
           : isProcessing
           ? "Processing..."
+          : isSpeaking
+          ? "Speaking..."
           : "Tap to speak"}
       </p>
 
@@ -131,8 +187,9 @@ export default function VoiceUIPage() {
           )}
           {response && (
             <div className="p-3 rounded-lg bg-primary/10 text-sm">
-              <span className="text-xs text-muted-foreground block mb-1">
-                ORBIT:
+              <span className="text-xs text-muted-foreground block mb-1 flex items-center gap-1">
+                ORBIT
+                {isSpeaking && <Volume2 className="w-3 h-3 animate-pulse" />}
               </span>
               {response}
             </div>

@@ -10,6 +10,7 @@ import {
   Monitor,
   Activity,
   LogOut,
+  CheckSquare,
 } from "lucide-react";
 import { useSession, signOut } from "@/lib/auth-client";
 import { AuthGuard } from "@/components/auth-guard";
@@ -17,6 +18,7 @@ import { AuthGuard } from "@/components/auth-guard";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Control Center", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/voice-ui", label: "Voice", icon: Mic },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },

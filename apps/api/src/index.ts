@@ -1,12 +1,29 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, "../.env") });
 import Fastify from "fastify";
 import { auth } from "./auth.js";
 import { aiRoutes } from "./routes/ai/index.js";
 import { chatRoutes } from "./routes/chat/index.js";
 import { settingsRoutes } from "./routes/settings/index.js";
 import { activityRoutes } from "./routes/activity/index.js";
+import { transcribeRoutes } from "./routes/transcribe/index.js";
+import { ttsRoutes } from "./routes/tts/index.js";
+import { taskRoutes } from "./routes/tasks/index.js";
 
-const server = Fastify({ logger: true });
+const server = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
+
+// ─── Raw body parser for audio uploads ────────────────────────────
+const RAW_TYPES = ["audio/webm", "audio/mpeg", "audio/ogg", "audio/wav", "audio/mp4", "application/octet-stream"];
+for (const type of RAW_TYPES) {
+  server.addContentTypeParser(type, { parseAs: "buffer" }, (_req, body, done) => {
+    done(null, body);
+  });
+}
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3002";
 
@@ -72,6 +89,9 @@ server.register(aiRoutes, { prefix: "/api/ai" });
 server.register(chatRoutes, { prefix: "/api/chat" });
 server.register(settingsRoutes, { prefix: "/api/settings" });
 server.register(activityRoutes, { prefix: "/api/activity" });
+server.register(transcribeRoutes, { prefix: "/api/transcribe" });
+server.register(ttsRoutes, { prefix: "/api/tts" });
+server.register(taskRoutes, { prefix: "/api/tasks" });
 
 // ─── Start ───────────────────────────────────────────────────────
 

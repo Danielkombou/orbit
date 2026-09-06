@@ -92,6 +92,7 @@ class LLMClient:
         kwargs: dict[str, Any] = {"model": model, "messages": formatted}
         if tools:
             kwargs["tools"] = tools
+        kwargs["max_tokens"] = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
         response = await client.chat.completions.create(**kwargs)
         choice = response.choices[0]
