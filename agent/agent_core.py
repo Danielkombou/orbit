@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 # Tools that produce visual output (screenshots should be sent to LLM)
 VISUAL_TOOLS = {"browser_screenshot", "browser_navigate", "browser_click", "browser_type"}
 
-# Limit tool calls per step to avoid context overflow (Groq 7000 ITPM)
-MAX_TOOLS_PER_STEP = 3
+# Limit tool calls per step to keep context manageable
+MAX_TOOLS_PER_STEP = 5
 
-# Context management: summarize when messages exceed this token estimate
-# Must be well under 7000 ITPM limit to leave room for tool definitions
-MAX_CONTEXT_TOKENS = 3500
+# Context management: condense when messages exceed this token estimate
+# OpenRouter free tier: 20 req/min, 200 req/day, 256K-1M context depending on model
+MAX_CONTEXT_TOKENS = 20000
 
 
 def _estimate_tokens(text: str) -> int:
