@@ -21,7 +21,8 @@ VISUAL_TOOLS = {"browser_screenshot", "browser_navigate", "browser_click", "brow
 MAX_TOOLS_PER_STEP = 3
 
 # Context management: summarize when messages exceed this token estimate
-MAX_CONTEXT_TOKENS = 5000
+# Must be well under 7000 ITPM limit to leave room for tool definitions
+MAX_CONTEXT_TOKENS = 3500
 
 
 def _estimate_tokens(text: str) -> int:
@@ -80,7 +81,7 @@ class Agent:
             logger.info("Step %d/%d", step_num, self.max_steps)
 
             # Condense context if approaching token limit
-            if self._estimate_message_tokens(messages) > MAX_CONTEXT_TOKENS:
+            if self._estimate_message_tokens(messages, tool_defs) > MAX_CONTEXT_TOKENS:
                 logger.info("Context too large, condensing messages")
                 messages = self._condense_messages(messages)
 
@@ -155,7 +156,7 @@ class Agent:
             yield {"type": "step_start", "step": step_num, "max": self.max_steps}
 
             # Condense context if approaching token limit
-            if self._estimate_message_tokens(messages) > MAX_CONTEXT_TOKENS:
+            if self._estimate_message_tokens(messages, tool_defs) > MAX_CONTEXT_TOKENS:
                 logger.info("Context too large, condensing messages")
                 messages = self._condense_messages(messages)
 
@@ -231,14 +232,17 @@ For other requests: use tools to help. Never do consequential actions without as
     async def cleanup(self):
         await self.computer.cleanup()
 
-    def _estimate_message_tokens(self, messages: list[Message]) -> int:
-        """Estimate total tokens in messages list."""
+    def _estimate_message_tokens(self, messages: list[Message], tool_defs: list[dict] | None = None) -> int:
+        """Estimate total tokens in messages list plus tool definitions."""
         total = 0
         for msg in messages:
             total += _estimate_tokens(msg.content or "")
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     total += _estimate_tokens(tc.name) + _estimate_tokens(json.dumps(tc.arguments))
+        # Add tool definitions overhead (each tool is ~100-200 tokens)
+        if tool_defs:
+            total += len(tool_defs) * 150
         return total
 
     def _condense_messages(self, messages: list[Message]) -> list[Message]:
@@ -246,22 +250,23 @@ For other requests: use tools to help. Never do consequential actions without as
         if len(messages) <= 4:
             return messages
 
+        before_count = len(messages)
         system_msg = messages[0]
         user_msg = messages[1]
-        recent = messages[-6:] if len(messages) > 6 else messages[1:]
-        middle = messages[2:-6] if len(messages) > 6 else []
+        recent = messages[-4:] if len(messages) > 4 else messages[1:]
+        middle = messages[2:-4] if len(messages) > 4 else []
 
         condensed_parts = []
         for msg in middle:
             if msg.role == Role.TOOL:
                 content = msg.content or ""
-                if len(content) > 200:
-                    condensed_parts.append(f"[Tool result truncated: {content[:100]}...]")
+                if len(content) > 100:
+                    condensed_parts.append(f"[truncated: {content[:50]}...]")
                 else:
                     condensed_parts.append(content)
 
         if condensed_parts:
-            summary = "[Earlier context]\n" + "\n".join(condensed_parts[-3:])
+            summary = "[Earlier]\n" + "\n".join(condensed_parts[-2:])
             condensed = [
                 system_msg,
                 user_msg,
@@ -270,4 +275,5 @@ For other requests: use tools to help. Never do consequential actions without as
         else:
             condensed = [system_msg] + recent
 
+        logger.info("Condensed messages: %d -> %d", before_count, len(condensed))
         return condensed

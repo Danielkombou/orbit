@@ -212,6 +212,7 @@ async def websocket_agent(ws: WebSocket):
             data = await ws.receive_json()
             task = data.get("task", "")
             screenshots = data.get("screenshots", [])
+            slim = data.get("slim", True)  # Default to slim for Groq free tier
 
             if not task:
                 await ws.send_json({"type": "error", "message": "No task provided"})
@@ -220,7 +221,7 @@ async def websocket_agent(ws: WebSocket):
             await ws.send_json({"type": "started", "task": task})
 
             try:
-                async for event in agent.run_streaming(task, screenshots=screenshots):
+                async for event in agent.run_streaming(task, screenshots=screenshots, slim=slim):
                     await ws.send_json(event)
             except Exception as e:
                 await ws.send_json({"type": "error", "message": str(e)})
