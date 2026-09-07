@@ -74,20 +74,37 @@ class LLMClient:
         images: list[str] | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream a chat completion, yielding {type, ...} events."""
+        import asyncio
         client = self._get_client()
         model = self._get_model()
 
-        if self.provider == "openai":
-            async for event in self._chat_openai_stream(client, model, messages, tools, images):
-                yield event
-        else:
-            # Fallback: non-streaming providers yield full response as one chunk
-            resp = await self.chat(messages, tools, images)
-            if resp.content:
-                yield {"type": "text_delta", "delta": resp.content}
-            if resp.tool_calls:
-                yield {"type": "tool_calls", "tool_calls": resp.tool_calls}
-            yield {"type": "done", "finish_reason": resp.finish_reason}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                if self.provider == "openai":
+                    async for event in self._chat_openai_stream(client, model, messages, tools, images):
+                        yield event
+                    return
+                else:
+                    # Fallback: non-streaming providers yield full response as one chunk
+                    resp = await self.chat(messages, tools, images)
+                    if resp.content:
+                        yield {"type": "text_delta", "delta": resp.content}
+                    if resp.tool_calls:
+                        yield {"type": "tool_calls", "tool_calls": resp.tool_calls}
+                    yield {"type": "done", "finish_reason": resp.finish_reason}
+                    return
+            except Exception as e:
+                error_str = str(e).upper()
+                is_transient = "503" in error_str or "UNAVAILABLE" in error_str or "429" in error_str or "TIMEOUT" in error_str
+                if is_transient and attempt < max_retries - 1:
+                    wait = 2 ** attempt * 2
+                    logger.warning("Transient error (attempt %d/%d): %s. Retrying in %ds...",
+                                   attempt + 1, max_retries, e, wait)
+                    yield {"type": "text_delta", "delta": f"\n[Retrying in {wait}s...]\n"}
+                    await asyncio.sleep(wait)
+                else:
+                    raise
 
     async def _chat_openai_stream(
         self, client, model: str, messages: list[Message],
