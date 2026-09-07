@@ -26,3 +26,4 @@ pnpm-debug.log*
 
 # Git
 *.swp
+agent/.env
