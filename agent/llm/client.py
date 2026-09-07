@@ -30,10 +30,9 @@ class LLMClient:
                 api_key=os.getenv("ANTHROPIC_API_KEY"),
             )
         elif self.provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-            self._client = genai.GenerativeModel(
-                model_name=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+            from google import genai
+            self._client = genai.Client(
+                api_key=os.getenv("GEMINI_API_KEY"),
             )
         else:
             import openai
@@ -122,8 +121,10 @@ class LLMClient:
         tool_calls_acc: dict[int, dict] = {}
         content_parts: list[str] = []
         finish_reason = None
+        chunk_count = 0
 
         async for chunk in stream:
+            chunk_count += 1
             delta = chunk.choices[0].delta if chunk.choices else None
             finish_reason = chunk.choices[0].finish_reason if chunk.choices else finish_reason
 
@@ -144,6 +145,9 @@ class LLMClient:
                             acc["name"] = tc_delta.function.name
                         if tc_delta.function.arguments:
                             acc["args_str"] += tc_delta.function.arguments
+
+        logger.info("Stream complete: %d chunks, %d content parts, %d tool calls, finish=%s",
+                     chunk_count, len(content_parts), len(tool_calls_acc), finish_reason)
 
         # Yield accumulated tool calls
         if tool_calls_acc:
@@ -271,11 +275,12 @@ class LLMClient:
         self, client, model: str, messages: list[Message],
         tools: list[dict] | None, images: list[str] | None,
     ) -> LLMResponse:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
 
-        # Build Gemini history
-        history = []
+        # Build contents and system instruction
         system_instruction = ""
+        contents = []
 
         for m in messages:
             if m.role == Role.SYSTEM:
@@ -287,65 +292,66 @@ class LLMClient:
                 parts.append(m.content)
             if m.tool_calls:
                 for tc in m.tool_calls:
-                    parts.append(json.dumps({"function_call": {"name": tc.name, "args": tc.arguments}}))
+                    parts.append(types.Part.from_function_response(
+                        name=tc.name,
+                        response=tc.arguments,
+                    ))
             if parts:
-                history.append({"role": role, "parts": parts})
+                contents.append(types.Content(role=role, parts=parts))
 
-        # Ensure history starts with user
-        if history and history[0]["role"] != "user":
-            history.insert(0, {"role": "user", "parts": ["Ready."]})
+        # Ensure contents starts with user
+        if contents and contents[0].role != "user":
+            contents.insert(0, types.Content(role="user", parts=["Ready."]))
 
-        # Configure tools for Gemini
+        # Build tools
         gemini_tools = None
         if tools:
             function_declarations = []
             for t in tools:
                 fn = t.get("function", {})
-                function_declarations.append(genai.protos.FunctionDeclaration(
+                params = fn.get("parameters", {}).get("properties", {})
+                if params:
+                    gemini_params = types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            k: types.Schema(type=types.Type.STRING, description=v.get("description", ""))
+                            for k, v in params.items()
+                        },
+                        required=fn.get("parameters", {}).get("required", []),
+                    )
+                else:
+                    gemini_params = None
+                function_declarations.append(types.FunctionDeclaration(
                     name=fn["name"],
                     description=fn.get("description", ""),
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            k: genai.protos.Schema(type=genai.protos.Type.STRING, description=v.get("description", ""))
-                            for k, v in fn.get("parameters", {}).get("properties", {}).items()
-                        },
-                    ) if fn.get("parameters", {}).get("properties") else None,
+                    parameters=gemini_params,
                 ))
-            gemini_tools = genai.protos.Tool(function_declarations=function_declarations)
+            gemini_tools = [types.Tool(function_declarations=function_declarations)]
 
-        # Build content with images
-        contents = []
-        for msg in history:
-            contents.append(genai.protos.Content(
-                role=msg["role"],
-                parts=[genai.protos.Part(text=p) for p in msg["parts"]],
-            ))
-
-        # If we have images, add them to the last user message
+        # Add images to last user message
         if images and contents:
             for c in reversed(contents):
                 if c.role == "user":
                     for img in images:
-                        c.parts.append(genai.protos.Part(
-                            inline_data=genai.protos.Blob(
-                                mime_type="image/png",
-                                data=base64.b64decode(img),
-                            )
+                        c.parts.append(types.Part.from_bytes(
+                            mime_type="image/png",
+                            data=base64.b64decode(img),
                         ))
                     break
 
-        config = genai.types.GenerationConfig(temperature=0.7)
-        if gemini_tools:
-            response = await client.generate_content_async(
-                contents,
-                tools=[gemini_tools],
-                generation_config=config,
-            )
-        else:
-            response = await client.generate_content_async(
-                contents, generation_config=config,
-            )
+        # Build config
+        config = types.GenerateContentConfig(
+            temperature=0.7,
+            tools=gemini_tools or [],
+        )
+        if system_instruction:
+            config.system_instruction = system_instruction
+
+        response = await client.aio.models.generate_content(
+            model=model,
+            contents=contents,
+            config=config,
+        )
 
         # Parse response
         tool_calls = []
