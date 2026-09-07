@@ -185,7 +185,11 @@ class Agent:
             full_content = "".join(content_parts) if content_parts else None
 
             if not tool_calls:
-                yield {"type": "done", "answer": full_content or "Task completed.", "success": True}
+                # If no content and no tools, the model may have failed to respond properly
+                answer = full_content
+                if not answer:
+                    answer = "I apologize, but I wasn't able to process that request. Could you please rephrase or try a different approach?"
+                yield {"type": "done", "answer": answer, "success": True}
                 return
 
             messages.append(Message(
@@ -224,10 +228,19 @@ class Agent:
     def _system_prompt(self) -> str:
         tools_list = ", ".join(self.tools.list_tools())
         today = __import__("datetime").date.today().isoformat()
-        return f"""You are ORBIT, a student AI assistant. Today: {today}. Tools: {tools_list}
+        return f"""You are ORBIT, a student AI assistant. Today: {today}. You MUST use tools to help users. Available tools: {tools_list}
 
-When user asks to "prepare" for a time period: recall() context, list_tasks(), list_notes(), search_web() for deadlines, create_note() with plan, create_task() for each deadline with due_date.
-For other requests: use tools to help. Never do consequential actions without asking first. Be concise."""
+IMPORTANT: Always use tools when the user asks you to do something. Do NOT just say "Task completed" without actually doing work using tools.
+
+Workflow for "prepare me for this week/time period":
+1. First call recall() to get stored context
+2. Call list_tasks() to see pending tasks
+3. Call list_notes() to see relevant notes
+4. Call search_web() to find upcoming deadlines/events
+5. Call create_note() with a summary plan
+6. Call create_task() for each deadline found
+
+For other requests: use the appropriate tools. Never do consequential actions without asking first. Be concise."""
 
     async def cleanup(self):
         await self.computer.cleanup()
