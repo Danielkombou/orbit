@@ -205,23 +205,31 @@ async def websocket_agent(ws: WebSocket):
     """WebSocket endpoint for real-time agent communication."""
     await ws.accept()
     agent = Agent()
+    cancel_event = asyncio.Event()
     logger.info("WebSocket client connected")
 
     try:
         while True:
             data = await ws.receive_json()
+
+            # Handle cancel signal
+            if data.get("cancel"):
+                cancel_event.set()
+                continue
+
             task = data.get("task", "")
             screenshots = data.get("screenshots", [])
-            slim = data.get("slim", True)  # Default to slim for Groq free tier
+            slim = data.get("slim", True)
 
             if not task:
                 await ws.send_json({"type": "error", "message": "No task provided"})
                 continue
 
+            cancel_event.clear()
             await ws.send_json({"type": "started", "task": task})
 
             try:
-                async for event in agent.run_streaming(task, screenshots=screenshots, slim=slim):
+                async for event in agent.run_streaming(task, screenshots=screenshots, slim=slim, cancel_event=cancel_event):
                     await ws.send_json(event)
             except Exception as e:
                 await ws.send_json({"type": "error", "message": str(e)})

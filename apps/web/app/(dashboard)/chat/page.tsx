@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, User, Loader2, Search, Globe, FileText, Brain, Terminal, CheckSquare } from "lucide-react";
+import { Send, Bot, User, Loader2, Search, Globe, FileText, Brain, Terminal, CheckSquare, Square } from "lucide-react";
 
 interface Message {
   id: string;
@@ -50,6 +50,26 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopGeneration = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ cancel: true }));
+      wsRef.current.close();
+    }
+    setIsStreaming(false);
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.role === "assistant" && last.isStreaming) {
+        updated[updated.length - 1] = {
+          ...last,
+          content: last.content || "Generation stopped.",
+          isStreaming: false,
+        };
+      }
+      return updated;
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -264,11 +284,12 @@ export default function ChatPage() {
           />
           <Button
             size="icon"
-            onClick={sendMessage}
-            disabled={!input.trim() || isStreaming}
+            onClick={isStreaming ? stopGeneration : sendMessage}
+            disabled={!isStreaming && !input.trim()}
+            variant={isStreaming ? "destructive" : "default"}
           >
             {isStreaming ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Square className="w-4 h-4" />
             ) : (
               <Send className="w-4 h-4" />
             )}

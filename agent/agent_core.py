@@ -144,7 +144,8 @@ class Agent:
             steps=steps, total_steps=self.max_steps,
         )
 
-    async def run_streaming(self, task: str, screenshots: list[str] | None = None, slim: bool = False) -> AsyncGenerator[dict, None]:
+    async def run_streaming(self, task: str, screenshots: list[str] | None = None, slim: bool = False, cancel_event: asyncio.Event | None = None) -> AsyncGenerator[dict, None]:
+        import asyncio
         tool_defs = self.tools.get_core_definitions() if slim else self.tools.get_definitions()
         messages = [
             Message(role=Role.SYSTEM, content=self._system_prompt()),
@@ -153,6 +154,11 @@ class Agent:
         pending_screenshots: list[str] = list(screenshots or [])
 
         for step_num in range(1, self.max_steps + 1):
+            # Check for cancellation
+            if cancel_event and cancel_event.is_set():
+                yield {"type": "done", "answer": "Generation stopped.", "success": False}
+                return
+
             yield {"type": "step_start", "step": step_num, "max": self.max_steps}
 
             # Condense context if approaching token limit
