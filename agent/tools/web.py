@@ -15,7 +15,7 @@ HEADERS = {
 }
 
 
-async def search_web(query: str, num_results: int = 5) -> dict:
+async def search_web(query: str, num_results: int = 3) -> dict:
     """Search the web via DuckDuckGo HTML and parse results."""
     try:
         url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"

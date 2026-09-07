@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 # Tools that produce visual output (screenshots should be sent to LLM)
 VISUAL_TOOLS = {"browser_screenshot", "browser_navigate", "browser_click", "browser_type"}
 
+# Limit tool calls per step to avoid context overflow (Groq 7000 ITPM)
+MAX_TOOLS_PER_STEP = 3
+
+# Context management: summarize when messages exceed this token estimate
+MAX_CONTEXT_TOKENS = 5000
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate: ~4 chars per token for English."""
+    return len(text) // 4
+
 
 @dataclass
 class AgentStep:
@@ -68,6 +79,11 @@ class Agent:
         for step_num in range(1, self.max_steps + 1):
             logger.info("Step %d/%d", step_num, self.max_steps)
 
+            # Condense context if approaching token limit
+            if self._estimate_message_tokens(messages) > MAX_CONTEXT_TOKENS:
+                logger.info("Context too large, condensing messages")
+                messages = self._condense_messages(messages)
+
             try:
                 response = await self.llm.chat(
                     messages=messages,
@@ -92,7 +108,10 @@ class Agent:
             if response.content:
                 steps.append(AgentStep(step_number=step_num, action="think", thought=response.content))
 
-            for tc in response.tool_calls:
+            for i, tc in enumerate(response.tool_calls):
+                if i >= MAX_TOOLS_PER_STEP:
+                    logger.info("  Skipping remaining %d tools (limit %d)", len(response.tool_calls) - MAX_TOOLS_PER_STEP, MAX_TOOLS_PER_STEP)
+                    break
                 logger.info("  Calling tool: %s(%s)", tc.name, tc.arguments)
                 result_str = await self.tools.execute(tc.name, tc.arguments)
 
@@ -135,6 +154,11 @@ class Agent:
         for step_num in range(1, self.max_steps + 1):
             yield {"type": "step_start", "step": step_num, "max": self.max_steps}
 
+            # Condense context if approaching token limit
+            if self._estimate_message_tokens(messages) > MAX_CONTEXT_TOKENS:
+                logger.info("Context too large, condensing messages")
+                messages = self._condense_messages(messages)
+
             content_parts: list[str] = []
             tool_calls = []
 
@@ -167,7 +191,10 @@ class Agent:
                 role=Role.ASSISTANT, content=full_content, tool_calls=tool_calls,
             ))
 
-            for tc in tool_calls:
+            for i, tc in enumerate(tool_calls):
+                if i >= MAX_TOOLS_PER_STEP:
+                    logger.info("  Skipping remaining %d tools (limit %d)", len(tool_calls) - MAX_TOOLS_PER_STEP, MAX_TOOLS_PER_STEP)
+                    break
                 yield {"type": "tool_call", "name": tc.name, "args": tc.arguments}
                 result_str = await self.tools.execute(tc.name, tc.arguments)
 
@@ -203,3 +230,44 @@ For other requests: use tools to help. Never do consequential actions without as
 
     async def cleanup(self):
         await self.computer.cleanup()
+
+    def _estimate_message_tokens(self, messages: list[Message]) -> int:
+        """Estimate total tokens in messages list."""
+        total = 0
+        for msg in messages:
+            total += _estimate_tokens(msg.content or "")
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    total += _estimate_tokens(tc.name) + _estimate_tokens(json.dumps(tc.arguments))
+        return total
+
+    def _condense_messages(self, messages: list[Message]) -> list[Message]:
+        """Condense older tool results to reduce context size."""
+        if len(messages) <= 4:
+            return messages
+
+        system_msg = messages[0]
+        user_msg = messages[1]
+        recent = messages[-6:] if len(messages) > 6 else messages[1:]
+        middle = messages[2:-6] if len(messages) > 6 else []
+
+        condensed_parts = []
+        for msg in middle:
+            if msg.role == Role.TOOL:
+                content = msg.content or ""
+                if len(content) > 200:
+                    condensed_parts.append(f"[Tool result truncated: {content[:100]}...]")
+                else:
+                    condensed_parts.append(content)
+
+        if condensed_parts:
+            summary = "[Earlier context]\n" + "\n".join(condensed_parts[-3:])
+            condensed = [
+                system_msg,
+                user_msg,
+                Message(role=Role.ASSISTANT, content=summary),
+            ] + recent
+        else:
+            condensed = [system_msg] + recent
+
+        return condensed
