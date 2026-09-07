@@ -289,7 +289,7 @@ class LLMClient:
             role = "user" if m.role in (Role.USER, Role.TOOL) else "model"
             parts = []
             if m.content:
-                parts.append(m.content)
+                parts.append(types.Part.from_text(text=m.content))
             if m.tool_calls:
                 for tc in m.tool_calls:
                     parts.append(types.Part.from_function_response(
@@ -301,7 +301,7 @@ class LLMClient:
 
         # Ensure contents starts with user
         if contents and contents[0].role != "user":
-            contents.insert(0, types.Content(role="user", parts=["Ready."]))
+            contents.insert(0, types.Content(role="user", parts=[types.Part.from_text(text="Ready.")]))
 
         # Build tools
         gemini_tools = None
